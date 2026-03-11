@@ -11,7 +11,7 @@ from sklearn.metrics import f1_score, classification_report, accuracy_score
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.utils import read_split_csv, get_split_dataframes, set_seed
+from src.utils import read_split_csv, get_split_dataframes, set_seed, plot_training_history
 from src.models.train_cnn import BottleDataset, get_train_transforms, get_val_transforms
 
 RANDOM_STATE = 42
@@ -104,7 +104,7 @@ def train_efficientnet():
 
     # Learning rate scheduler (reduce LR when val_f1 plateaus)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=3, verbose=True
+        optimizer, mode='max', factor=0.5, patience=3
     )
 
     # --- MLflow setup ---
@@ -123,6 +123,7 @@ def train_efficientnet():
         mlflow.log_param("scheduler", "ReduceLROnPlateau (factor=0.5, patience=3)")
 
         best_val_f1 = 0.0
+        history = {'train_loss': [], 'val_loss': [], 'train_f1': [], 'val_f1': []}
 
         for epoch in range(NUM_EPOCHS):
             # ---- Train phase ----
@@ -152,23 +153,34 @@ def train_efficientnet():
             model.eval()
             val_preds_all = []
             val_labels_all = []
+            val_running_loss = 0.0
 
             with torch.no_grad():
                 for images, labels in val_loader:
                     images, labels = images.to(device), labels.to(device)
                     outputs = model(images)
+                    loss_val = criterion(outputs, labels)
+                    val_running_loss += loss_val.item() * images.size(0)
                     _, preds = torch.max(outputs, 1)
                     val_preds_all.extend(preds.cpu().numpy())
                     val_labels_all.extend(labels.cpu().numpy())
 
+            val_epoch_loss = val_running_loss / len(val_dataset)
             val_f1 = f1_score(val_labels_all, val_preds_all, average='weighted')
             val_accuracy = accuracy_score(val_labels_all, val_preds_all)
 
             # Step scheduler based on val F1
             scheduler.step(val_f1)
 
+            # ---- Record history ----
+            history['train_loss'].append(epoch_loss)
+            history['val_loss'].append(val_epoch_loss)
+            history['train_f1'].append(train_f1)
+            history['val_f1'].append(val_f1)
+
             # ---- Log metrics per epoch ----
             mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+            mlflow.log_metric("val_loss", val_epoch_loss, step=epoch)
             mlflow.log_metric("train_f1", train_f1, step=epoch)
             mlflow.log_metric("val_f1_weighted", val_f1, step=epoch)
             mlflow.log_metric("val_accuracy", val_accuracy, step=epoch)
@@ -178,6 +190,7 @@ def train_efficientnet():
 
             print(f"Epoch [{epoch+1}/{NUM_EPOCHS}] | "
                   f"Loss: {epoch_loss:.4f} | "
+                  f"Val Loss: {val_epoch_loss:.4f} | "
                   f"Train F1: {train_f1:.4f} | "
                   f"Val F1: {val_f1:.4f} | "
                   f"Val Acc: {val_accuracy:.4f} | "
@@ -191,6 +204,10 @@ def train_efficientnet():
                 print(f"  ★ Best!", end="")
 
             print()
+
+        # ---- Plot training history ----
+        plot_path = plot_training_history(history, "EfficientNet-B0")
+        mlflow.log_artifact(plot_path)
 
         # ---- Final report ----
         print(f"\n--- Best Validation F1: {best_val_f1:.4f} ---")
