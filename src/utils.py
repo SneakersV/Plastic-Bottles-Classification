@@ -27,6 +27,50 @@ def set_seed(seed=SEED):
     print(f"  [Seed fixed: {seed}]")
 
 
+# ======================= Training Plots =======================
+
+def plot_training_history(history, model_name, save_dir="plots"):
+    """
+    Plot training vs validation loss and F1 score curves.
+
+    Args:
+        history: dict with keys 'train_loss', 'val_loss', 'train_f1', 'val_f1'
+                 (each is a list of values per epoch)
+        model_name: str, name of the model (used for title and filename)
+        save_dir: str, directory to save the plot image
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    epochs = range(1, len(history['train_loss']) + 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # --- Loss plot ---
+    axes[0].plot(epochs, history['train_loss'], 'b-o', markersize=4, label='Train Loss')
+    if 'val_loss' in history:
+        axes[0].plot(epochs, history['val_loss'], 'r-o', markersize=4, label='Val Loss')
+    axes[0].set_title(f'{model_name} - Loss')
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Loss')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # --- F1 Score plot ---
+    axes[1].plot(epochs, history['train_f1'], 'b-o', markersize=4, label='Train F1')
+    axes[1].plot(epochs, history['val_f1'], 'r-o', markersize=4, label='Val F1')
+    axes[1].set_title(f'{model_name} - F1 Score (weighted)')
+    axes[1].set_xlabel('Epoch')
+    axes[1].set_ylabel('F1 Score')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_path = os.path.join(save_dir, f'{model_name.lower().replace(" ", "_")}_training_history.png')
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+    print(f"\n  📊 Training plot saved to: {save_path}")
+    return save_path
+
+
 # ======================= CSV & Split =======================
 
 def read_split_csv(csv_path):
