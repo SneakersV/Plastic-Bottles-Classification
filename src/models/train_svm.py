@@ -4,13 +4,16 @@ import joblib
 import mlflow
 import numpy as np
 from sklearn import svm
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.utils import read_split_csv, get_split_dataframes, load_dataset
+from src.utils import read_split_csv, get_split_dataframes, load_dataset, load_dataset_augmented, set_seed
 
+RANDOM_STATE = 42
 
 SPLIT_CSV = "data/splits/split.csv"
 MODEL_SAVE_PATH = "models/best_svm.pkl"
@@ -19,9 +22,11 @@ IMAGE_SIZE = (128, 128)
 
 
 def train_svm_model():
-    """Train SVM with GridSearchCV + MLflow tracking."""
+    """Train SVM with augmented data + StandardScaler + GridSearchCV + MLflow."""
 
     # --- Load data ---
+    set_seed(RANDOM_STATE)
+
     print("=" * 60)
     print("  SVM - Training")
     print("=" * 60)
@@ -29,25 +34,31 @@ def train_svm_model():
     df = read_split_csv(SPLIT_CSV)
     train_df, val_df, test_df = get_split_dataframes(df)
 
-    print(f"Loading training data ({len(train_df)} images)...")
-    X_train, y_train = load_dataset(train_df, image_size=IMAGE_SIZE)
+    print(f"\nLoading training data WITH augmentation ({len(train_df)} original images)...")
+    X_train, y_train = load_dataset_augmented(train_df, image_size=IMAGE_SIZE)
 
-    print(f"Loading validation data ({len(val_df)} images)...")
+    print(f"Loading validation data WITHOUT augmentation ({len(val_df)} images)...")
     X_val, y_val = load_dataset(val_df, image_size=IMAGE_SIZE)
 
     # --- MLflow setup ---
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="SVM"):
-        # --- GridSearchCV for best hyperparameters ---
+        # --- Pipeline: StandardScaler + SVM ---
+        pipe = Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', svm.SVC(random_state=RANDOM_STATE)),
+        ])
+
+        # GridSearchCV searches over classifier params (prefix with 'clf__')
         param_grid = {
-            'C': [0.1, 1, 10],
-            'kernel': ['linear', 'rbf'],
+            'clf__C': [0.1, 1, 10],
+            'clf__kernel': ['linear', 'rbf'],
         }
 
-        print("\nRunning GridSearchCV...")
+        print("\nRunning GridSearchCV (with StandardScaler)...")
         grid_search = GridSearchCV(
-            svm.SVC(),
+            pipe,
             param_grid,
             cv=3,
             scoring='f1_weighted',
@@ -74,18 +85,22 @@ def train_svm_model():
 
         # --- Log to MLflow ---
         mlflow.log_param("model_type", "SVM")
+        mlflow.log_param("augmentation", "flip, rotation, brightness, contrast")
+        mlflow.log_param("standardization", "StandardScaler")
+        mlflow.log_param("train_samples_augmented", len(X_train))
         for key, value in best_params.items():
-            mlflow.log_param(key, value)
+            mlflow.log_param(key.replace('clf__', ''), value)
         mlflow.log_param("image_size", IMAGE_SIZE)
 
         mlflow.log_metric("val_f1_weighted", val_f1)
         mlflow.log_metric("val_accuracy", val_accuracy)
 
-        # --- Save best model ---
+        # --- Save best model (Pipeline includes scaler!) ---
         os.makedirs(os.path.dirname(MODEL_SAVE_PATH), exist_ok=True)
         joblib.dump(best_model, MODEL_SAVE_PATH)
         mlflow.log_artifact(MODEL_SAVE_PATH)
         print(f"\nBest model saved to: {MODEL_SAVE_PATH}")
+        print("  (Pipeline includes StandardScaler - no separate scaler needed)")
 
     return best_model, val_f1
 

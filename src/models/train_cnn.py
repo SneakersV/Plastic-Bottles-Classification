@@ -1,4 +1,4 @@
-# CNN PyTorch - Plastic Bottle Classification
+# CNN PyTorch - Plastic Bottle Classification (with Data Augmentation)
 import os
 import sys
 import mlflow
@@ -6,12 +6,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
+from PIL import Image
 from sklearn.metrics import f1_score, classification_report, accuracy_score
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.utils import read_split_csv, get_split_dataframes, load_dataset_for_cnn
+from src.utils import read_split_csv, get_split_dataframes, set_seed
 
+RANDOM_STATE = 42
 
 SPLIT_CSV = "data/splits/split.csv"
 MODEL_SAVE_PATH = "models/best_cnn.pth"
@@ -24,21 +27,78 @@ LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
 NUM_CLASSES = 2
 
+# ImageNet normalization stats (standard practice)
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+# ===================== Transforms =====================
+
+def get_train_transforms(image_size=IMAGE_SIZE):
+    """
+    Training transforms with data augmentation:
+    - RandomResizedCrop: random crop & resize (simulates scale variation)
+    - RandomHorizontalFlip: 50% chance to flip horizontally
+    - RandomRotation: rotate ±15 degrees
+    - ColorJitter: random brightness, contrast, saturation, hue changes
+    - Normalize: ImageNet mean/std standardization
+    """
+    return transforms.Compose([
+        transforms.Resize((image_size[0] + 12, image_size[1] + 12)),
+        transforms.RandomResizedCrop(image_size[0], scale=(0.8, 1.0)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(degrees=15),
+        transforms.ColorJitter(
+            brightness=0.2, contrast=0.2,
+            saturation=0.2, hue=0.1
+        ),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+    ])
+
+
+def get_val_transforms(image_size=IMAGE_SIZE):
+    """
+    Validation/Test transforms (no augmentation, just resize + normalize).
+    """
+    return transforms.Compose([
+        transforms.Resize(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+    ])
+
 
 # ======================== Dataset ========================
 
 class BottleDataset(Dataset):
-    """Simple dataset wrapping pre-loaded tensors."""
+    """
+    PyTorch Dataset that loads images from file paths on-the-fly
+    and applies transforms (augmentation for train, normalize for val/test).
+    """
 
-    def __init__(self, images, labels):
-        self.images = images   # Tensor (N, 3, H, W)
-        self.labels = labels   # Tensor (N,)
+    def __init__(self, dataframe, transform=None, image_size=(128, 128)):
+        self.df = dataframe.reset_index(drop=True)
+        self.transform = transform
+        self.image_size = image_size
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.df)
 
     def __getitem__(self, idx):
-        return self.images[idx], self.labels[idx]
+        row = self.df.iloc[idx]
+        img = Image.open(row['filepath']).convert('RGB')
+        label = int(row['label'])
+
+        if self.transform:
+            img = self.transform(img)
+        else:
+            # Fallback: simple resize + to tensor
+            img = transforms.Compose([
+                transforms.Resize(self.image_size),
+                transforms.ToTensor(),
+            ])(img)
+
+        return img, label
 
 
 # ======================== CNN Model ========================
@@ -90,10 +150,12 @@ class CNN(nn.Module):
 # ======================== Training ========================
 
 def train_cnn():
-    """Train CNN model with MLflow tracking. Saves best model by val F1."""
+    """Train CNN model with data augmentation + MLflow tracking. Saves best model by val F1."""
+
+    set_seed(RANDOM_STATE)
 
     print("=" * 60)
-    print("  CNN - Training")
+    print("  CNN - Training (with Data Augmentation)")
     print("=" * 60)
 
     # --- Device ---
@@ -104,15 +166,17 @@ def train_cnn():
     df = read_split_csv(SPLIT_CSV)
     train_df, val_df, _ = get_split_dataframes(df)
 
-    print(f"Loading training data ({len(train_df)} images)...")
-    X_train, y_train = load_dataset_for_cnn(train_df, image_size=IMAGE_SIZE)
+    # --- Create Datasets with transforms ---
+    train_transform = get_train_transforms(IMAGE_SIZE)
+    val_transform = get_val_transforms(IMAGE_SIZE)
 
-    print(f"Loading validation data ({len(val_df)} images)...")
-    X_val, y_val = load_dataset_for_cnn(val_df, image_size=IMAGE_SIZE)
+    print(f"\nTraining set: {len(train_df)} images (with on-the-fly augmentation)")
+    print(f"  Augmentations: RandomResizedCrop, HorizontalFlip, Rotation ±15°, ColorJitter")
+    print(f"  Normalization: ImageNet mean={IMAGENET_MEAN}, std={IMAGENET_STD}")
+    print(f"Validation set: {len(val_df)} images (no augmentation, normalized only)")
 
-    # --- DataLoaders ---
-    train_dataset = BottleDataset(X_train, y_train)
-    val_dataset = BottleDataset(X_val, y_val)
+    train_dataset = BottleDataset(train_df, transform=train_transform, image_size=IMAGE_SIZE)
+    val_dataset = BottleDataset(val_df, transform=val_transform, image_size=IMAGE_SIZE)
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -132,6 +196,8 @@ def train_cnn():
         mlflow.log_param("num_epochs", NUM_EPOCHS)
         mlflow.log_param("image_size", IMAGE_SIZE)
         mlflow.log_param("device", str(device))
+        mlflow.log_param("augmentation", "RandomResizedCrop, HFlip, Rotation, ColorJitter")
+        mlflow.log_param("normalization", f"ImageNet mean={IMAGENET_MEAN}, std={IMAGENET_STD}")
 
         best_val_f1 = 0.0
 
