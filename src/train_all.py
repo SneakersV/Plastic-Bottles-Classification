@@ -1,5 +1,5 @@
 """
-Master script: Train all 3 models and evaluate them.
+Master script: Train all 4 models and evaluate them.
 Usage: python src/train_all.py
 """
 import os
@@ -13,6 +13,7 @@ os.chdir(PROJECT_ROOT)
 from src.models.train_lr import train_lr
 from src.models.train_svm import train_svm_model
 from src.models.train_cnn import train_cnn
+from src.models.train_efficientnet import train_efficientnet
 from src.evaluate import evaluate_all
 
 
@@ -28,23 +29,28 @@ def main():
         print("   Please run 'python src/split_data.py' first.")
         sys.exit(1)
 
-    print("\n" + "━" * 60)
-    print("  STEP 1/4: Training Logistic Regression")
-    print("━" * 60)
-    lr_model, lr_f1 = train_lr()
+    # print("\n" + "━" * 60)
+    # print("  STEP 1/5: Training Logistic Regression")
+    # print("━" * 60)
+    # lr_model, lr_f1 = train_lr()
 
     print("\n" + "━" * 60)
-    print("  STEP 2/4: Training SVM")
+    print("  STEP 2/5: Training SVM")
     print("━" * 60)
     svm_model, svm_f1 = train_svm_model()
 
     print("\n" + "━" * 60)
-    print("  STEP 3/4: Training CNN")
+    print("  STEP 3/5: Training CNN")
     print("━" * 60)
     cnn_model, cnn_f1 = train_cnn()
 
     print("\n" + "━" * 60)
-    print("  STEP 4/4: Final Evaluation on Test Set")
+    print("  STEP 4/5: Training EfficientNet-B0 (Transfer Learning)")
+    print("━" * 60)
+    effnet_model, effnet_f1 = train_efficientnet()
+
+    print("\n" + "━" * 60)
+    print("  STEP 5/5: Final Evaluation on Test Set")
     print("━" * 60)
     results = evaluate_all()
 

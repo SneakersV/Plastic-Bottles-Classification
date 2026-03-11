@@ -1,6 +1,6 @@
 """
 Unified evaluation script.
-Loads the 3 best saved models and evaluates them on the TEST set.
+Loads all best saved models and evaluates them on the TEST set.
 Prints a comparison table of F1 scores.
 """
 import os
@@ -8,25 +8,28 @@ import sys
 import joblib
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from src.utils import read_split_csv, get_split_dataframes, load_dataset, load_dataset_for_cnn
-from src.models.train_cnn import CNN, IMAGE_SIZE, NUM_CLASSES
+from src.utils import read_split_csv, get_split_dataframes, load_dataset
+from src.models.train_cnn import CNN, BottleDataset, get_val_transforms, IMAGE_SIZE, NUM_CLASSES
+from src.models.train_efficientnet import build_efficientnet
 
 
 SPLIT_CSV = "data/splits/split.csv"
 TARGET_NAMES = ["others", "plastic_bottle"]
 
 MODELS = {
-    "LogisticRegression": "models/best_logistic_regression.pkl",
+    # "LogisticRegression": "models/best_logistic_regression.pkl",
     "SVM": "models/best_svm.pkl",
     "CNN": "models/best_cnn.pth",
+    "EfficientNet-B0": "models/best_efficientnet.pth",
 }
 
 
 def evaluate_sklearn_model(model_path, X_test, y_test):
-    """Evaluate a scikit-learn model (LogReg or SVM)."""
+    """Evaluate a scikit-learn Pipeline model (scaler + classifier)."""
     model = joblib.load(model_path)
     y_pred = model.predict(X_test)
     f1 = f1_score(y_test, y_pred, average='weighted')
@@ -35,9 +38,14 @@ def evaluate_sklearn_model(model_path, X_test, y_test):
     return f1, acc, report
 
 
-def evaluate_cnn_model(model_path, X_test_tensor, y_test_tensor):
-    """Evaluate a PyTorch CNN model."""
+def evaluate_cnn_model(model_path, test_df):
+    """Evaluate a PyTorch CNN model using val transforms (with ImageNet normalization)."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Use the same val transforms (resize + normalize, NO augmentation)
+    val_transform = get_val_transforms(IMAGE_SIZE)
+    test_dataset = BottleDataset(test_df, transform=val_transform, image_size=IMAGE_SIZE)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     model = CNN(num_classes=NUM_CLASSES)
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
@@ -45,16 +53,50 @@ def evaluate_cnn_model(model_path, X_test_tensor, y_test_tensor):
     model.eval()
 
     all_preds = []
+    all_labels = []
+
     with torch.no_grad():
-        # Process in batches to avoid memory issues
-        batch_size = 32
-        for i in range(0, len(X_test_tensor), batch_size):
-            batch_x = X_test_tensor[i:i+batch_size].to(device)
-            outputs = model(batch_x)
+        for images, labels in test_loader:
+            images = images.to(device)
+            outputs = model(images)
             _, preds = torch.max(outputs, 1)
             all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels.numpy())
 
-    y_test_np = y_test_tensor.numpy()
+    y_test_np = np.array(all_labels)
+    y_pred_np = np.array(all_preds)
+
+    f1 = f1_score(y_test_np, y_pred_np, average='weighted')
+    acc = accuracy_score(y_test_np, y_pred_np)
+    report = classification_report(y_test_np, y_pred_np, target_names=TARGET_NAMES)
+    return f1, acc, report
+
+
+def evaluate_efficientnet_model(model_path, test_df):
+    """Evaluate EfficientNet-B0 model using val transforms."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    val_transform = get_val_transforms(IMAGE_SIZE)
+    test_dataset = BottleDataset(test_df, transform=val_transform, image_size=IMAGE_SIZE)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+    model = build_efficientnet(num_classes=NUM_CLASSES, freeze_backbone=False)
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    model.to(device)
+    model.eval()
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            outputs = model(images)
+            _, preds = torch.max(outputs, 1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels.numpy())
+
+    y_test_np = np.array(all_labels)
     y_pred_np = np.array(all_preds)
 
     f1 = f1_score(y_test_np, y_pred_np, average='weighted')
@@ -64,7 +106,7 @@ def evaluate_cnn_model(model_path, X_test_tensor, y_test_tensor):
 
 
 def evaluate_all():
-    """Evaluate all 3 models and print comparison table."""
+    """Evaluate all models and print comparison table."""
 
     print("=" * 60)
     print("  MODEL EVALUATION ON TEST SET")
@@ -75,11 +117,9 @@ def evaluate_all():
     _, _, test_df = get_split_dataframes(df)
     print(f"\nTest set size: {len(test_df)} images\n")
 
-    # Flat data for sklearn models
+    # Flat data for sklearn models (no augmentation at test time)
+    # Note: saved sklearn models include StandardScaler in the Pipeline
     X_test_flat, y_test_flat = load_dataset(test_df, image_size=IMAGE_SIZE)
-
-    # Tensor data for CNN
-    X_test_tensor, y_test_tensor = load_dataset_for_cnn(test_df, image_size=IMAGE_SIZE)
 
     results = {}
 
@@ -94,7 +134,9 @@ def evaluate_all():
         print(f"{'─' * 50}")
 
         if name == "CNN":
-            f1, acc, report = evaluate_cnn_model(path, X_test_tensor, y_test_tensor)
+            f1, acc, report = evaluate_cnn_model(path, test_df)
+        elif name == "EfficientNet-B0":
+            f1, acc, report = evaluate_efficientnet_model(path, test_df)
         else:
             f1, acc, report = evaluate_sklearn_model(path, X_test_flat, y_test_flat)
 
