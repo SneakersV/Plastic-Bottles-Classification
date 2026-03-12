@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Notebooks
+.ipynb_checkpoints
+
+# MLflow
+mlruns/
+mlflow.db
+
+# Do not ignore data and models so they can be copied into the image!
+# Though in production, it's better to mount them as volumes.

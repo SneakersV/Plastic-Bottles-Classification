@@ -4,10 +4,11 @@ Dự án phân loại hình ảnh (Computer Vision) sử dụng Machine Learning
 
 ## 🎯 Tính năng
 
-- Huấn luyện và đánh giá trên 3 loại mô hình:
+- Huấn luyện và đánh giá trên 4 loại mô hình:
   - **Logistic Regression** (GridSearchCV tuning)
   - **Support Vector Machine (SVM)** (GridSearchCV tuning)
   - **Convolutional Neural Network (CNN)** (PyTorch, Custom architecture)
+  - **EfficientNet-B0** (PyTorch, Transfer Learning với ImageNet weights)
 - Theo dõi quá trình huấn luyện và versioning model tự động bằng **MLflow**.
 - Tự động lưu mô hình tốt nhất (Best model) dựa trên chỉ số **F1-score (weighted)**.
 - Giao diện so sánh hiệu năng các mô hình trên tập Test Set.
@@ -47,7 +48,7 @@ python src/split_data.py
 > **Output:** File `data/splits/split.csv` sẽ được tạo ra, lưu thông tin của toàn bộ ảnh và nhãn của chúng.
 
 ### Bước 4: Huấn luyện Mô hình (Training)
-Chạy 1 lệnh duy nhất dưới đây để tự động train lần lượt 3 mô hình (LogReg -> SVM -> CNN) và sau đó chạy đánh giá tổng quát:
+Chạy 1 lệnh duy nhất dưới đây để tự động train lần lượt 4 mô hình (LogReg -> SVM -> CNN -> EfficientNet) và sau đó chạy đánh giá tổng quát:
 ```bash
 python src/train_all.py
 ```
@@ -69,6 +70,7 @@ Mô hình sẽ lưu tại thư mục `models/` tại root của dự án.
 - **LogReg:** `models/best_logistic_regression.pkl` (Dùng joblib để load)
 - **SVM:** `models/best_svm.pkl` (Dùng joblib để load)
 - **CNN:** `models/best_cnn.pth` (Dùng `torch.load` và nạp vào state_dict)
+- **EfficientNet:** `models/best_efficientnet.pth` (Dùng `torch.load` và nạp vào state_dict)
 
 ### 2. Logs từ MLflow
 Mọi thông số kỹ thuật (param), chỉ số biểu đồ (metrics: Loss, Accuracy, F1) và Model Artifacts đều được lưu tại thư mục `mlruns/`.
@@ -81,7 +83,26 @@ Sau đó mở trình duyệt tại: [http://localhost:5000](http://localhost:500
 
 ---
 
+## 🌐 Chạy Web App qua Docker
+
+Dự án đã được đóng gói sẵn bằng Docker để bạn có thể triển khai ở bất kỳ đâu mà không lo về môi trường (sau khi bạn đã có models/ đã được train ở Bước 4).
+
+### 1. Build Docker Image
+Mở terminal ở thư mục gốc dự án và chạy:
+```bash
+docker build -t plastic-bottle-classifier .
+```
+
+### 2. Chạy Docker Container
+```bash
+docker run -p 8501:8501 plastic-bottle-classifier
+```
+
+Sau đó Web App sẽ hiển thị tại: [http://localhost:8501](http://localhost:8501)
+
+---
+
 ## 🚧 Roadmap tiếp theo
-- [ ] Giao diện Web App (Streamlit) cho phép User tải ảnh lên và chọn Model dự đoán.
+- [x] Giao diện Web App (Streamlit) cho phép User tải ảnh lên và chọn Model dự đoán.
+- [x] Đóng gói toàn bộ dự án bằng Docker.
 - [ ] Pipeline CI/CD bằng DVC và Github Actions.
-- [ ] Đóng gói toàn bộ dự án bằng Docker.
