@@ -12,19 +12,19 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from src.utils import read_split_csv, get_split_dataframes, load_dataset
+from src.utils import read_split_csv, get_split_dataframes, load_dataset, config
 from src.models.train_cnn import CNN, BottleDataset, get_val_transforms, IMAGE_SIZE, NUM_CLASSES
 from src.models.train_efficientnet import build_efficientnet
 
 
-SPLIT_CSV = "data/splits/split.csv"
-TARGET_NAMES = ["others", "plastic_bottle"]
+SPLIT_CSV = config["paths"]["split_csv"]
+TARGET_NAMES = config["classes"]["names"]
 
 MODELS = {
-    # "LogisticRegression": "models/best_logistic_regression.pkl",
-    "SVM": "models/best_svm.pkl",
-    "CNN": "models/best_cnn.pth",
-    "EfficientNet-B0": "models/best_efficientnet.pth",
+    "LogisticRegression": os.path.join(config["paths"]["model_save_dir"], "best_logistic_regression.pkl"),
+    "SVM": os.path.join(config["paths"]["model_save_dir"], "best_svm.pkl"),
+    "CNN": os.path.join(config["paths"]["model_save_dir"], "best_cnn.pth"),
+    "EfficientNet-B0": os.path.join(config["paths"]["model_save_dir"], "best_efficientnet.pth"),
 }
 
 
