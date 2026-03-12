@@ -11,21 +11,21 @@ from sklearn.metrics import f1_score, classification_report, accuracy_score
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.utils import read_split_csv, get_split_dataframes, set_seed, plot_training_history
+from src.utils import read_split_csv, get_split_dataframes, set_seed, plot_training_history, config
 from src.models.train_cnn import BottleDataset, get_train_transforms, get_val_transforms
 
 RANDOM_STATE = 42
 
-SPLIT_CSV = "data/splits/split.csv"
-MODEL_SAVE_PATH = "models/best_efficientnet.pth"
-EXPERIMENT_NAME = "Plastic_Bottle_Classification"
-IMAGE_SIZE = (128, 128)
+SPLIT_CSV = config["paths"]["split_csv"]
+MODEL_SAVE_PATH = os.path.join(config["paths"]["model_save_dir"], "best_efficientnet.pth")
+EXPERIMENT_NAME = config["mlflow"]["experiment_name"]
+IMAGE_SIZE = tuple(config["training"]["image_size"])
 
 # Hyperparameters
-BATCH_SIZE = 16
-LEARNING_RATE = 1e-4   # Lower LR for fine-tuning pretrained model
-NUM_EPOCHS = 15
-NUM_CLASSES = 2
+BATCH_SIZE = config["training"]["batch_size"]
+LEARNING_RATE = config["training.efficientnet"]["learning_rate"]
+NUM_EPOCHS = config["training.efficientnet"]["num_epochs"]
+NUM_CLASSES = config["training.efficientnet"]["num_classes"]
 
 
 # ======================== Model ========================
@@ -93,7 +93,8 @@ def train_efficientnet():
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # --- Model, Loss, Optimizer ---
-    model = build_efficientnet(num_classes=NUM_CLASSES, freeze_backbone=True).to(device)
+    freeze_backbone = config["training.efficientnet"]["freeze_backbone"]
+    model = build_efficientnet(num_classes=NUM_CLASSES, freeze_backbone=freeze_backbone).to(device)
     criterion = nn.CrossEntropyLoss()
 
     # Only optimize parameters that require grad (classifier head)
@@ -119,7 +120,7 @@ def train_efficientnet():
         mlflow.log_param("num_epochs", NUM_EPOCHS)
         mlflow.log_param("image_size", IMAGE_SIZE)
         mlflow.log_param("device", str(device))
-        mlflow.log_param("augmentation", "RandomResizedCrop, HFlip, Rotation, ColorJitter")
+        mlflow.log_param("augmentation", "Crop, HFlip, Rot, ColorJitter, Blur, V-Strip, H-Strip, Checkered")
         mlflow.log_param("scheduler", "ReduceLROnPlateau (factor=0.5, patience=3)")
 
         best_val_f1 = 0.0

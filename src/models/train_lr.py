@@ -13,13 +13,13 @@ RANDOM_STATE = 42
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.utils import read_split_csv, get_split_dataframes, load_dataset, load_dataset_augmented, set_seed
+from src.utils import read_split_csv, get_split_dataframes, load_dataset, load_dataset_augmented, set_seed, config
 
 
-SPLIT_CSV = "data/splits/split.csv"
-MODEL_SAVE_PATH = "models/best_logistic_regression.pkl"
-EXPERIMENT_NAME = "Plastic_Bottle_Classification"
-IMAGE_SIZE = (128, 128)
+SPLIT_CSV = config["paths"]["split_csv"]
+MODEL_SAVE_PATH = os.path.join(config["paths"]["model_save_dir"], "best_logistic_regression.pkl")
+EXPERIMENT_NAME = config["mlflow"]["experiment_name"]
+IMAGE_SIZE = tuple(config["training"]["image_size"])
 
 
 def train_lr():

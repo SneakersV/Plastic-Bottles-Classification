@@ -8,24 +8,28 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
+import random
 from sklearn.metrics import f1_score, classification_report, accuracy_score
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.utils import read_split_csv, get_split_dataframes, set_seed, plot_training_history
+from src.utils import (
+    read_split_csv, get_split_dataframes, set_seed, plot_training_history, config,
+    add_blur, add_vertical_strip, add_horizontal_strip, add_checkered_strip
+)
 
 RANDOM_STATE = 42
 
-SPLIT_CSV = "data/splits/split.csv"
-MODEL_SAVE_PATH = "models/best_cnn.pth"
-EXPERIMENT_NAME = "Plastic_Bottle_Classification"
-IMAGE_SIZE = (128, 128)
+SPLIT_CSV = config["paths"]["split_csv"]
+MODEL_SAVE_PATH = os.path.join(config["paths"]["model_save_dir"], "best_cnn.pth")
+EXPERIMENT_NAME = config["mlflow"]["experiment_name"]
+IMAGE_SIZE = tuple(config["training"]["image_size"])
 
 # Hyperparameters
-BATCH_SIZE = 16
-LEARNING_RATE = 1e-3
-NUM_EPOCHS = 20
-NUM_CLASSES = 2
+BATCH_SIZE = config["training"]["batch_size"]
+LEARNING_RATE = config["training.cnn"]["learning_rate"]
+NUM_EPOCHS = config["training.cnn"]["num_epochs"]
+NUM_CLASSES = config["training.cnn"]["num_classes"]
 
 # ImageNet normalization stats (standard practice)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -52,6 +56,12 @@ def get_train_transforms(image_size=IMAGE_SIZE):
             brightness=0.2, contrast=0.2,
             saturation=0.2, hue=0.1
         ),
+        # Custom Augmentations (Noise & Occlusions)
+        transforms.RandomApply([transforms.Lambda(lambda x: add_blur(x, radius=random.uniform(1.0, 2.5)))], p=0.7),
+        transforms.RandomApply([transforms.Lambda(lambda x: add_vertical_strip(x, strip_width_ratio=random.uniform(0.1, 0.2)))], p=0.3),
+        transforms.RandomApply([transforms.Lambda(lambda x: add_horizontal_strip(x, strip_height_ratio=random.uniform(0.1, 0.2)))], p=0.3),
+        transforms.RandomApply([transforms.Lambda(lambda x: add_checkered_strip(x, grid_size=random.randint(15, 30)))], p=0.5),
+        
         transforms.ToTensor(),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
@@ -196,7 +206,7 @@ def train_cnn():
         mlflow.log_param("num_epochs", NUM_EPOCHS)
         mlflow.log_param("image_size", IMAGE_SIZE)
         mlflow.log_param("device", str(device))
-        mlflow.log_param("augmentation", "RandomResizedCrop, HFlip, Rotation, ColorJitter")
+        mlflow.log_param("augmentation", "Crop, HFlip, Rot, ColorJitter, Blur, V-Strip, H-Strip, Checkered")
         mlflow.log_param("normalization", f"ImageNet mean={IMAGENET_MEAN}, std={IMAGENET_STD}")
 
         best_val_f1 = 0.0

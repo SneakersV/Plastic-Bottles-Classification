@@ -1,0 +1,38 @@
+[environment]
+# Recommended Python version
+python_version = "3.12"
+
+[paths]
+# Directory paths for the project
+raw_data_dir = "data/raw"
+split_csv = "data/splits/split.csv"
+model_save_dir = "models"
+plots_dir = "plots"
+
+[mlflow]
+# MLflow tracking configuration
+experiment_name = "Plastic_Bottle_Classification"
+tracking_uri = "sqlite:///mlflow.db"
+
+[training]
+# Global training configurations
+image_size = [128, 128]
+batch_size = 16
+random_seed = 42
+
+[training.cnn]
+# CNN specific hyperparameters
+learning_rate = 0.001
+num_epochs = 20
+num_classes = 2
+
+[training.efficientnet]
+# EfficientNet specific hyperparameters
+learning_rate = 0.0001
+num_epochs = 15
+num_classes = 2
+freeze_backbone = true
+
+[classes]
+# Class labels used for prediction and evaluation
+names = ["others", "plastic_bottle"]
