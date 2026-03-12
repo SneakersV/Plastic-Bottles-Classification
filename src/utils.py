@@ -1,15 +1,32 @@
 import os
 import pandas as pd
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import random
+import tomllib
 
+
+# ======================= Config =======================
+
+def load_config(config_path="config.toml"):
+    """Load TOML configuration file."""
+    # Try finding the config in current dir or project root
+    if not os.path.exists(config_path):
+        current_dir = os.path.dirname(__file__)
+        project_root = os.path.abspath(os.path.join(current_dir, '..'))
+        config_path = os.path.join(project_root, "config.toml")
+        
+    with open(config_path, "rb") as f:
+        return tomllib.load(f)
+
+# Global access to config
+config = load_config()
 
 # ======================= Seed =======================
 
-SEED = 42
+SEED = config["training"]["random_seed"]
 
 def set_seed(seed=SEED):
     """
@@ -125,7 +142,40 @@ def load_dataset(df, image_size=(128, 128)):
     return X, y
 
 
-# =========== Data Augmentation for LogReg / SVM ===========
+# =========== Data Augmentation Functions ===========
+
+def add_blur(img, radius=2):
+    """Add Gaussian Blur to the image."""
+    return img.filter(ImageFilter.GaussianBlur(radius=radius))
+
+def add_vertical_strip(img, strip_width_ratio=0.15):
+    """Add a black vertical strip to the image to simulate occlusion."""
+    img_np = np.array(img).copy()
+    H, W, C = img_np.shape
+    strip_width = max(1, int(W * strip_width_ratio))
+    x = random.randint(0, W - strip_width)
+    img_np[:, x:x+strip_width, :] = 0
+    return Image.fromarray(img_np)
+
+def add_horizontal_strip(img, strip_height_ratio=0.15):
+    """Add a black horizontal strip to the image to simulate occlusion."""
+    img_np = np.array(img).copy()
+    H, W, C = img_np.shape
+    strip_height = max(1, int(H * strip_height_ratio))
+    y = random.randint(0, H - strip_height)
+    img_np[y:y+strip_height, :, :] = 0
+    return Image.fromarray(img_np)
+
+def add_checkered_strip(img, grid_size=20):
+    """Add a black checkerboard pattern to the image."""
+    img_np = np.array(img).copy()
+    H, W, C = img_np.shape
+    x_indices = np.arange(W) // grid_size
+    y_indices = np.arange(H) // grid_size
+    mask = (y_indices[:, None] + x_indices[None, :]) % 2 == 0
+    img_np[mask] = 0
+    return Image.fromarray(img_np)
+
 
 def _pil_augment(img):
     """
@@ -148,6 +198,18 @@ def _pil_augment(img):
     # 4. Contrast adjustment (0.7x to 1.3x)
     enhancer = ImageEnhance.Contrast(img)
     augmented.append(enhancer.enhance(random.uniform(0.7, 1.3)))
+
+    # 5. Gaussian Blur (noise)
+    augmented.append(add_blur(img, radius=random.uniform(1.0, 2.5)))
+
+    # 6. Vertical Strip (occlusion)
+    augmented.append(add_vertical_strip(img, strip_width_ratio=random.uniform(0.1, 0.2)))
+
+    # 7. Horizontal Strip (occlusion)
+    augmented.append(add_horizontal_strip(img, strip_height_ratio=random.uniform(0.1, 0.2)))
+
+    # 8. Checkered Strip (structured noise/occlusion)
+    augmented.append(add_checkered_strip(img, grid_size=random.randint(15, 30)))
 
     return augmented
 
