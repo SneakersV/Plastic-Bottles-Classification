@@ -27,9 +27,9 @@ IMAGE_SIZE = tuple(config["training"]["image_size"])
 
 # Hyperparameters
 BATCH_SIZE = config["training"]["batch_size"]
-LEARNING_RATE = config["training.cnn"]["learning_rate"]
-NUM_EPOCHS = config["training.cnn"]["num_epochs"]
-NUM_CLASSES = config["training.cnn"]["num_classes"]
+LEARNING_RATE = config["training"]["cnn"]["learning_rate"]
+NUM_EPOCHS = config["training"]["cnn"]["num_epochs"]
+NUM_CLASSES = config["training"]["cnn"]["num_classes"]
 
 # ImageNet normalization stats (standard practice)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]

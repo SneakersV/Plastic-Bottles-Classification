@@ -23,9 +23,9 @@ IMAGE_SIZE = tuple(config["training"]["image_size"])
 
 # Hyperparameters
 BATCH_SIZE = config["training"]["batch_size"]
-LEARNING_RATE = config["training.efficientnet"]["learning_rate"]
-NUM_EPOCHS = config["training.efficientnet"]["num_epochs"]
-NUM_CLASSES = config["training.efficientnet"]["num_classes"]
+LEARNING_RATE = config["training"]["efficientnet"]["learning_rate"]
+NUM_EPOCHS = config["training"]["efficientnet"]["num_epochs"]
+NUM_CLASSES = config["training"]["efficientnet"]["num_classes"]
 
 
 # ======================== Model ========================
@@ -93,7 +93,7 @@ def train_efficientnet():
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # --- Model, Loss, Optimizer ---
-    freeze_backbone = config["training.efficientnet"]["freeze_backbone"]
+    freeze_backbone = config["training"]["efficientnet"]["freeze_backbone"]
     model = build_efficientnet(num_classes=NUM_CLASSES, freeze_backbone=freeze_backbone).to(device)
     criterion = nn.CrossEntropyLoss()
 
