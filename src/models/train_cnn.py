@@ -48,19 +48,16 @@ def get_train_transforms(image_size=IMAGE_SIZE):
     - Normalize: ImageNet mean/std standardization
     """
     return transforms.Compose([
-        transforms.Resize((image_size[0] + 12, image_size[1] + 12)),
         transforms.RandomResizedCrop(image_size[0], scale=(0.8, 1.0)),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomRotation(degrees=15),
         transforms.ColorJitter(
             brightness=0.2, contrast=0.2,
-            saturation=0.2, hue=0.1
+            saturation=0.1, hue=0.05
         ),
         # Custom Augmentations (Noise & Occlusions)
-        transforms.RandomApply([transforms.Lambda(lambda x: add_blur(x, radius=random.uniform(1.0, 2.5)))], p=0.7),
-        transforms.RandomApply([transforms.Lambda(lambda x: add_vertical_strip(x, strip_width_ratio=random.uniform(0.1, 0.2)))], p=0.3),
-        transforms.RandomApply([transforms.Lambda(lambda x: add_horizontal_strip(x, strip_height_ratio=random.uniform(0.1, 0.2)))], p=0.3),
-        transforms.RandomApply([transforms.Lambda(lambda x: add_checkered_strip(x, grid_size=random.randint(15, 30)))], p=0.5),
+        transforms.RandomApply([transforms.Lambda(lambda x: add_blur(x, radius=random.uniform(1.0, 2.5)))], p=0.2),
+        transforms.RandomApply([transforms.Lambda(lambda x: add_checkered_strip(x, grid_size=random.randint(15, 30)))], p=0.1),
         
         transforms.ToTensor(),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
